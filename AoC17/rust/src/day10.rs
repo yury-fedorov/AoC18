@@ -1,64 +1,99 @@
+use std::ops::{Index, IndexMut, Range};
 use std::str::FromStr;
 
-fn swap( list : &mut Vec<i32>, ai : usize, bi : usize ) {
-    let n = list.len();
-    let av = list[ai % n];
-    list[ai % n] = list[bi % n];
-    list[bi % n] = av;
+struct Circle<T> {
+    inner: Vec<T>,
 }
 
-fn reverse(list: &mut Vec<i32>, cur_pos : i32, cur_len : i32 ) {
-    let last = cur_pos + cur_len - 1;
-    let half = cur_len / 2;
-    for di in 0 .. half {
-        swap(list, ( cur_pos + di ) as usize, ( last - di ) as usize );
+impl<T> Circle<T> {
+    fn new(inner: Vec<T>) -> Self {
+        Circle { inner }
     }
 }
 
-pub fn task1(n : i32, l : &str ) -> i32 {
+impl<T> Index<usize> for Circle<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &T {
+        &self.inner[index % self.inner.len()]
+    }
+}
+
+impl<T> IndexMut<usize> for Circle<T>
+where Circle<T>: Index<usize, Output=T> {
+    fn index_mut(&mut self, index: usize) -> &mut T {
+        let l = self.inner.len();
+        &mut self.inner[index % l]
+    }
+}
+
+fn swap<T, I>(i: &mut I, ai: usize, bi: usize)
+where I: IndexMut<usize, Output=T>, T: Copy {
+    let av = i[ai];
+    i[ai] = i[bi];
+    i[bi] = av;
+}
+
+fn reverse<T, I>(i: &mut I, range: Range<usize>)
+where I: IndexMut<usize, Output=T>, T: Copy {
+    let half = range.len() / 2;
+    for di in 0..half {
+        swap(i, range.start + di, range.end - di -1);
+    }
+}
+
+pub fn task1(n: usize, l: &str) -> usize {
     // https://doc.rust-lang.org/std/ops/struct.Range.html
-    let mut list : Vec<i32> = (0 .. n).collect();
-    let lengths : Vec<i32> = l.split("," ).map( |e| i32::from_str( e.trim() ).unwrap() ).collect();
-    let mut cur_pos = 0;
-    let mut skip_size = 0;
+    let list: Vec<usize> = (0..n).collect();
+    let mut circle = Circle::new(list);
+    let lengths: Vec<usize> = l
+        .split(",")
+        .map(|e| usize::from_str(e.trim()).unwrap())
+        .collect();
+    let mut cur_pos: usize = 0;
+    let mut skip_size: usize = 0;
     for cur_len in lengths {
-        reverse( &mut list, cur_pos, cur_len );
-        cur_pos = ( cur_pos + cur_len + skip_size ) % n;
+        reverse(&mut circle, cur_pos..(cur_pos + cur_len));
+        cur_pos = (cur_pos + cur_len + skip_size);
         skip_size += 1;
     }
-    list.get(0).unwrap() * list.get(1).unwrap()
+    circle[0] * circle[1]
 }
 
-fn to_hex(n:i32) -> String { format!("{:01$x}", n, 2) }
+fn to_hex(n: usize) -> String {
+    format!("{:01$x}", n, 2)
+}
 
-fn xor( list: &Vec<i32>, start : usize ) -> i32 {
+fn xor<T, I>(i: &I, start: usize) -> T
+    where I: IndexMut<usize, Output=T>, T: Copy, T: std::ops::BitXorAssign {
     let n = 16;
-    let mut result = list[start];
-    for di in 1 .. n {
-        result ^= list[start + di];
+    let mut result = i[start];
+    for di in 1..n {
+        result ^= i[start + di];
     }
     result
 }
 
-pub fn task2(n : i32, l : &str) -> String {
-    let mut list : Vec<i32> = (0 .. n).collect();
+pub fn task2(n: usize, l: &str) -> String {
+    let list: Vec<usize> = (0..n).collect();
+    let mut circle = Circle::new(list);
     let nl = l.trim();
-    let mut tail = vec![17,31,73,47,23];
-    let mut head : Vec<i32>= nl.chars().map( |x| x as i32 ).collect();
-    head.append( &mut tail);
-    let lengths : Vec<i32>  = head;
+    let mut tail = vec![17, 31, 73, 47, 23];
+    let mut head: Vec<usize> = nl.chars().map(|x| x as usize).collect();
+    head.append(&mut tail);
+    let lengths: Vec<usize> = head;
     let mut cur_pos = 0;
     let mut skip_size = 0;
-    for _ in 0 .. 64 {
+    for _ in 0..64 {
         for cur_len in &lengths {
-            reverse( &mut list, cur_pos, *cur_len );
-            cur_pos = ( cur_pos + cur_len + skip_size ) % n;
+            reverse(&mut circle, cur_pos..(cur_pos + *cur_len));
+            cur_pos = (cur_pos + cur_len + skip_size);
             skip_size += 1;
         }
     }
     let mut result = String::new();
-    for i in 0 .. 16 {
-        result.push_str( &to_hex( xor( &list, i * 16 ) ) );
+    for i in 0..16 {
+        result.push_str(&to_hex(xor(&circle, i * 16)));
     }
     assert_eq!(32, result.len());
     result
